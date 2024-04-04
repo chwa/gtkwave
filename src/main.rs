@@ -1,6 +1,6 @@
 mod widget;
+use gtk::prelude::*;
 use gtk::{glib, Application, ApplicationWindow, Button};
-use gtk::{prelude::*, Label};
 
 const APP_ID: &str = "org.gtk_rs.HelloWorld2";
 

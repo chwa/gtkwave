@@ -3,7 +3,7 @@ use gtk::glib;
 glib::wrapper! {
     pub struct MyWidget(
         ObjectSubclass<imp::MyWidget>)
-        @extends gtk::DrawingArea, gtk::Widget;
+        @extends gtk::Widget;
 }
 
 impl MyWidget {
@@ -15,24 +15,20 @@ impl MyWidget {
 mod imp {
     use gtk;
     use gtk::cairo;
-    use gtk::gdk::RGBA;
     use gtk::glib;
     use gtk::glib::prelude::*;
     use gtk::glib::subclass::prelude::*;
     use gtk::glib::subclass::Signal;
+    use gtk::graphene::Rect;
     use gtk::prelude::*;
-    use gtk::subclass::drawing_area::DrawingAreaImpl;
     use gtk::subclass::widget::WidgetImpl;
 
     pub struct MyWidget {}
 
     impl MyWidget {
-        fn draw_func(widget: &gtk::DrawingArea, cr: &cairo::Context, _: i32, _: i32) {
-            let w = widget.downcast_ref::<super::MyWidget>().expect("Incorrect type");
-
-            // let w = w_imp.obj();
-            let width = w.width() as f64;
-            let height = w.height() as f64;
+        fn draw(&self, cr: &cairo::Context) {
+            let width = self.obj().width() as f64;
+            let height = self.obj().height() as f64;
             let left = (width * 0.05).round() + 0.5;
             let bot = (height * 0.05).round() + 0.5;
             let width = (width * 0.9).round();
@@ -42,8 +38,7 @@ mod imp {
 
             cr.set_source_rgb(0.15, 0.15, 0.15);
             cr.fill_preserve().unwrap();
-            // cr.set_source_rgb(0.2, 0.2, 0.2);
-            //
+
             cr.set_source_rgb(0.7, 0.7, 0.7);
             cr.set_line_width(1.0);
             cr.stroke().unwrap();
@@ -95,7 +90,7 @@ mod imp {
     impl ObjectSubclass for MyWidget {
         const NAME: &'static str = "MyWidget";
         type Type = super::MyWidget;
-        type ParentType = gtk::DrawingArea;
+        type ParentType = gtk::Widget;
 
         fn new() -> Self {
             Self {}
@@ -106,8 +101,6 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             let w = self.obj();
-
-            w.set_draw_func(&Self::draw_func);
             w.set_size_request(640, 480);
         }
         fn signals() -> &'static [Signal] {
@@ -144,10 +137,13 @@ mod imp {
         // }
     }
     impl WidgetImpl for MyWidget {
-        // fn snapshot(&self, snapshot: &gtk::Snapshot) {
-        //     /* ... */
-        // }
-    }
+        fn snapshot(&self, snapshot: &gtk::Snapshot) {
+            let w = self.obj();
+            let (width, height) = (w.width() as f32, w.height() as f32);
 
-    impl DrawingAreaImpl for MyWidget {}
+            let cr = snapshot.append_cairo(&Rect::new(0.0, 0.0, width, height));
+
+            self.draw(&cr)
+        }
+    }
 }
