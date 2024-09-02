@@ -1,108 +1,148 @@
 use gtk::glib;
+use gtk::prelude::*;
+use gtk::subclass::prelude::*;
+use gtk::Adjustment;
+
+use crate::wave::PlotWaveform;
 
 glib::wrapper! {
-    pub struct MyWidget(
-        ObjectSubclass<imp::MyWidget>)
+    pub struct Chart(ObjectSubclass<imp::Chart>)
         @extends gtk::Widget;
 }
 
-impl MyWidget {
-    pub fn new() -> MyWidget {
-        glib::Object::new()
+impl Chart {
+    pub fn new() -> Chart {
+        let w: Self = glib::Object::new();
+
+        w.imp().hscroll.borrow().set_hexpand(true);
+        w
+    }
+
+    pub fn add_wave(&mut self, w: PlotWaveform) {
+        self.imp().state.borrow_mut().waves.push(w);
     }
 }
 
+pub struct AxisView {
+    data_min: f64,
+    data_max: f64,
+    window_min: f64,
+    window_max: f64,
+}
+
+impl Default for AxisView {
+    fn default() -> Self {
+        Self {
+            data_min: 0.0,
+            data_max: 1.0,
+            window_min: 0.2,
+            window_max: 0.8,
+        }
+    }
+}
+
+impl AxisView {
+    pub fn get_window(&self) -> (f64, f64) {
+        (self.window_min, self.window_max)
+    }
+
+    fn adjustment(&self) -> Adjustment {
+        let value = self.window_min;
+        let lower = self.data_min;
+        let upper = self.data_max;
+        let page_size = self.window_max - self.window_min;
+        let step_increment = 0.1 * page_size;
+        let page_increment = 0.8 * page_size;
+        Adjustment::new(
+            value,
+            lower,
+            upper,
+            step_increment,
+            page_increment,
+            page_size,
+        )
+    }
+}
+
+#[derive(Default)]
+pub struct View {
+    pub x: AxisView,
+    pub y: AxisView,
+}
+
+#[derive(Default)]
+pub struct ChartState {
+    pub waves: Vec<PlotWaveform>,
+    pub view: View,
+}
+
 mod imp {
+    use std::cell::RefCell;
+
     use gtk;
-    use gtk::cairo;
     use gtk::glib;
     use gtk::glib::prelude::*;
     use gtk::glib::subclass::prelude::*;
     use gtk::glib::subclass::Signal;
-    use gtk::graphene::Rect;
     use gtk::prelude::*;
+    use gtk::subclass::widget::WidgetClassExt;
     use gtk::subclass::widget::WidgetImpl;
 
-    pub struct MyWidget {}
+    use crate::plotarea::PlotArea;
 
-    impl MyWidget {
-        fn draw(&self, cr: &cairo::Context) {
-            let width = self.obj().width() as f64;
-            let height = self.obj().height() as f64;
-            let left = (width * 0.05).round() + 0.5;
-            let bot = (height * 0.05).round() + 0.5;
-            let width = (width * 0.9).round();
-            let height = (height * 0.9).round();
+    use super::ChartState;
+    use super::View;
 
-            cr.rectangle(left, bot, width, height);
+    pub struct Chart {
+        pub plotarea: RefCell<PlotArea>,
+        pub hscroll: RefCell<gtk::Scrollbar>,
+        pub state: RefCell<ChartState>,
+    }
 
-            cr.set_source_rgb(0.15, 0.15, 0.15);
-            cr.fill_preserve().unwrap();
-
-            cr.set_source_rgb(0.7, 0.7, 0.7);
-            cr.set_line_width(1.0);
-            cr.stroke().unwrap();
-
-            for i in 1..=9 {
-                cr.move_to(left + (i as f64 / 10.0 * width).round(), bot);
-                cr.line_to(left + (i as f64 / 10.0 * width).round(), bot + height);
+    impl Default for Chart {
+        fn default() -> Self {
+            let view = View::default();
+            Self {
+                plotarea: RefCell::new(PlotArea::new()),
+                hscroll: RefCell::new(gtk::Scrollbar::new(
+                    gtk::Orientation::Horizontal,
+                    Some(&view.x.adjustment()),
+                )),
+                state: RefCell::new(ChartState::default()),
             }
-            cr.set_dash(&[3.0, 3.0], 0.0);
-            cr.set_line_width(1.0);
-            cr.set_source_rgb(0.3, 0.3, 0.3);
-            cr.stroke().unwrap();
-
-            for i in 1..=9 {
-                cr.move_to(left, bot + (i as f64 / 10.0 * height).round());
-                cr.line_to(left + width, bot + (i as f64 / 10.0 * height).round());
-            }
-            cr.set_line_width(1.0);
-            cr.set_source_rgb(0.3, 0.3, 0.3);
-            cr.stroke().unwrap();
-
-            cr.set_dash(&[], 0.0);
-
-            cr.move_to(left, bot + height / 2.0);
-            for i in 0..=100 {
-                cr.line_to(
-                    left + (i as f64) / 100.0 * width,
-                    bot + height / 2.0 - (height * 0.4) * (0.13 * i as f64).sin(),
-                )
-            }
-            cr.set_source_rgb(0.8, 0.2, 0.8);
-            cr.stroke().unwrap();
-
-            cr.move_to(left, bot + height / 2.0);
-            for i in 0..=100 {
-                cr.line_to(
-                    left + (i as f64) / 100.0 * width,
-                    bot + height / 2.0 - (height * 0.03) * (0.33 * (i + 30) as f64).sin()
-                        + (height * 0.13) * (0.11 * i as f64).sin(),
-                )
-            }
-            cr.set_line_width(2.0);
-            cr.set_source_rgb(0.1, 0.6, 0.7);
-            cr.stroke().unwrap();
         }
     }
 
     #[glib::object_subclass]
-    impl ObjectSubclass for MyWidget {
-        const NAME: &'static str = "MyWidget";
-        type Type = super::MyWidget;
+    impl ObjectSubclass for Chart {
+        const NAME: &'static str = "Chart";
+        type Type = super::Chart;
         type ParentType = gtk::Widget;
 
-        fn new() -> Self {
-            Self {}
+        fn class_init(klass: &mut Self::Class) {
+            klass.set_layout_manager_type::<gtk::BoxLayout>();
         }
     }
 
-    impl ObjectImpl for MyWidget {
+    impl ObjectImpl for Chart {
         fn constructed(&self) {
             self.parent_constructed();
             let w = self.obj();
-            w.set_size_request(640, 480);
+
+            let layout = w.layout_manager().unwrap().downcast::<gtk::BoxLayout>().unwrap();
+            layout.set_orientation(gtk::Orientation::Vertical);
+
+            self.plotarea.borrow().set_parent(&*w);
+            self.plotarea.borrow().set_vexpand(true);
+            self.hscroll.borrow().set_parent(&*w);
+            self.hscroll.borrow().set_hexpand(true);
         }
+
+        fn dispose(&self) {
+            self.plotarea.borrow().unparent();
+            self.hscroll.borrow().unparent();
+        }
+
         fn signals() -> &'static [Signal] {
             use once_cell::sync::Lazy;
             static SIGNALS: Lazy<Vec<Signal>> = Lazy::new(|| {
@@ -126,24 +166,6 @@ mod imp {
             });
             PROPERTIES.as_ref()
         }
-
-        // fn set_property(&self, id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
-        //     /* ... */
-        // }
-
-        // fn property(&self, id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        //     let none: Option<&str> = None;
-        //     none.to_value()
-        // }
     }
-    impl WidgetImpl for MyWidget {
-        fn snapshot(&self, snapshot: &gtk::Snapshot) {
-            let w = self.obj();
-            let (width, height) = (w.width() as f32, w.height() as f32);
-
-            let cr = snapshot.append_cairo(&Rect::new(0.0, 0.0, width, height));
-
-            self.draw(&cr)
-        }
-    }
+    impl WidgetImpl for Chart {}
 }

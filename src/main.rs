@@ -1,6 +1,9 @@
+mod plotarea;
+mod wave;
 mod widget;
 use gtk::prelude::*;
 use gtk::{glib, Application, ApplicationWindow, Button};
+use wave::{PlotWaveform, Waveform};
 
 const APP_ID: &str = "org.gtk_rs.HelloWorld2";
 
@@ -35,7 +38,8 @@ fn build_ui(app: &Application) {
 
     vbox.append(&button);
 
-    let w = widget::MyWidget::new();
+    let mut w = widget::Chart::new();
+    w.add_wave(PlotWaveform::new(Waveform::example(), "sine wave"));
 
     w.set_vexpand(true);
 
